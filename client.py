@@ -1,44 +1,40 @@
-"""run a client that connects to a server and interacts with user using tkinter"""
-import tkinter as tk
-import requests
-from cryptography.fernet import Fernet
+""" run a client that connects to a server and interacts with user using tkinter """
 import constants
+from cryptography.fernet import Fernet
+import re
+import requests
+import tkinter as tk
 
 
-def load_key():
-    """Load the previously generated key"""
-    return open("secret.key", "rb").read()
-
-
-def encrypt_message(message):
+def encrypt_message(message: str) -> bytes:
     """
-    Encrypts a message"
+    Encrypts a message
     :param message: a regular message
     :return: the encrypted message
     """
-    key = load_key()
+    key = constants.key
     f = Fernet(key)
     message = message.encode()
     encrypted_message = f.encrypt(message)
     return encrypted_message
 
 
-def decrypt_message(encrypted_message):
+def decrypt_message(encrypted_message: bytes) -> bytes:
     """
     Decrypts an encrypted message
     :param encrypted_message: the encrypted message to decrypt
     :return: the decrypted message
     """
-    key = load_key()
+    key = constants.key
     f = Fernet(key)
     decrypted_message = f.decrypt(encrypted_message)
     return decrypted_message
 
 
-def download(label3):
+def download(outputlabel: tk.Label) -> None:
     """
     download a requested file from the server's files to a requested location
-    :param label3: the label where that response of server is written
+    :param outputlabel: the label where that response of server is written
     """
     path = constants.request
     path = path.split('/')
@@ -50,52 +46,52 @@ def download(label3):
         with open(str(path), 'w') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(decrypt_message(chunk).decode())
-    label3['text'] = f"file downloaded successfully to {path}"
+    outputlabel['text'] = f"file downloaded successfully to {path}"
 
 
-def upload(label3):
+def upload(outputlabel: tk.Label) -> None:
     """
     upload a requested file to the server
-    :param label3: the label where that response of server is written
+    :param outputlabel: the label where that response of server is written
     """
     path = constants.request.split("- ")
     path = path[-1]
     with open(path, 'r') as file:
         request = constants.request.split("/")
         name = request[-1]
-        i = 0
+        start = True
         for chunk in file:
-            if i == 0:
+            if start == True:
                 requests.put(f"http://{constants.ip}:{constants.port}/upload/{name}?q=w", data=encrypt_message(chunk))
+                start = False
             else:
                 requests.put(f"http://{constants.ip}:{constants.port}/upload/{name}/", data=encrypt_message(chunk))
-            i += 1
-    label3['text'] = "file uploaded successfully"
+    outputlabel['text'] = "file uploaded successfully"
 
 
-def regular(label3):
+def regular(outputlabel: tk.Label) -> None:
     """
     show the output of a requested linux terminal command by sending it to server and getting output
-    :param label3: the label where that response of server is written
+    :param outputlabel: the label where that response of server is written
     """
-    request = encrypt_message(constants.request)
+    request = encrypt_message(constants.request.split("- ")[-1])
     response = requests.put(f"http://{constants.ip}:{constants.port}/regular/", data=request)
     content = response.content
     content = decrypt_message(content).decode('unicode_escape')
-    label3['text'] = f"output:\n{content}"
+    outputlabel['text'] = f"output:\n{content}"
 
 
-def main():
-    """Run interactive tkinter client"""
+def main() -> None:
+    """ Run interactive tkinter client """
     root = tk.Tk()
     canvas1 = tk.Canvas(root, width=800, height=300)
     canvas1.pack()
-    label3 = tk.Label(root, text="")
-    label3.config(font=('helvetice', 14))
-    label3.pack(side="left")
-    entry1 = tk.Entry(root, width=80)
-    canvas1.create_window(400, 200, window=entry1)
-    button1 = tk.Button(text="run command", command=lambda: send_command(entry1, label3))
+    outputlabel = tk.Label(root, text="")
+    outputlabel.config(font=('helvetice', 14))
+    outputlabel.pack(side="left")
+    commandentry = tk.Entry(root, width=80)
+    canvas1.create_window(400, 200, window=commandentry)
+    button1 = tk.Button(text="run command", command=lambda: send_command(commandentry, outputlabel))
     canvas1.create_window(400, 250, window=button1)
 
     label1 = tk.Label(root, text="run a command")
@@ -108,20 +104,17 @@ def main():
     root.mainloop()
 
 
-def send_command(entry1, label3):
+def send_command(commandentry: tk.Entry, outputlabel: tk.Label) -> None:
     """
     send the command the user enters to server and present output using tkinter
-    :param entry1: the tkinter entry in which the user writes the command
-    :param label3: the label where that response of server is written
+    :param commandEntry: the tkinter entry in which the user writes the command
+    :param outputlabel: the label where that response of server is written
     """
-    request = entry1.get()
+    dict = {"download": download, "upload": upload, "command": regular}
+    request = commandentry.get()
     constants.request = request
-    if request[0:8] == "download":
-        download(label3)
-    elif request[0:6] == "upload":
-        upload(label3)
-    else:
-        regular(label3)
+    x = re.search('upload|download|command', request)
+    dict[x.group()](outputlabel)
 
 
 if __name__ == "__main__":
